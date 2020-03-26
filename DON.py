@@ -9,6 +9,11 @@ import torch.nn.functional as F
 from torchvision import transforms,models
 import torch.utils.model_zoo as model_zoo
 
+model_URL={'resnet34': 'https://download.pytorch.org/models/resnet34-333f7ec4.pth'}
+
+device=torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+print("GPU is working:",torch.cuda.is_available())
+
 # inspired https://github.com/warmspringwinds/vision/blob/eb6c13d3972662c55e752ce7a376ab26a1546fb5/torchvision/models/resnet.py
 def conv3x3(in_planes,out_planes,stride=1,dilation=1):
     kernel_size=np.asarray((3,3))
@@ -57,8 +62,8 @@ class DON(nn.Module):
         self.maxpool=nn.MaxPool2d(kernel_size=3,stride=2,padding=1)
         self.layer1=self.layer(64,layers[0])
         self.layer2=self.layer(128,layers[1],stride=2)
-        self.layer2 = self.layer(256, layers[2], stride=2)
-        self.layer2 = self.layer(512, layers[3], stride=2)
+        self.layer3 = self.layer(256, layers[2], stride=2)
+        self.layer4 = self.layer(512, layers[3], stride=2)
         self.fc=nn.Linear(512,self.num_classes)
         # initialization
         for m in self.modules():
@@ -86,7 +91,7 @@ class DON(nn.Module):
         dilation=self.multigrid[0]*self.current_dilation
         layers.append(Block(self.in_planes,planes,stride,downsample,dilation=dilation))
         self.in_planes=planes
-        for i in range(blocks):
+        for i in range(1,blocks):
             dilation = self.multigrid[0] * self.current_dilation
             layers.append(Block(self.in_planes, planes, dilation=dilation))
         return nn.Sequential(*layers)
@@ -100,5 +105,7 @@ class DON(nn.Module):
         x=self.fc(x)
         return x
 
-don=DON(256)
-print(don)
+don=DON(1000).to(device)
+don.load_state_dict(model_zoo.load_url(model_URL['resnet34']))
+
+

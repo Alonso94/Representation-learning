@@ -19,7 +19,7 @@ class TCN(nn.Module):
     def __init__(self):
         print("building the model")
         super().__init__()
-        self.inception=models.inception_v3(pretrained=True)
+        self.inception=models.inception_v3(pretrained=True,progress=True)
         self.conv1=self.inception.Conv2d_1a_3x3
         self.conv2_1=self.inception.Conv2d_2a_3x3
         self.conv2_2=self.inception.Conv2d_2b_3x3

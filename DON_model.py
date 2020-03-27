@@ -1,12 +1,8 @@
-import sys, os
 import numpy as np
-from PIL import Image
 import math
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from torchvision import transforms,models
 import torch.utils.model_zoo as model_zoo
 
 model_URL={'resnet34': 'https://download.pytorch.org/models/resnet34-333f7ec4.pth'}
@@ -15,6 +11,7 @@ device=torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu'
 print("GPU is working:",torch.cuda.is_available())
 
 # inspired https://github.com/warmspringwinds/vision/blob/eb6c13d3972662c55e752ce7a376ab26a1546fb5/torchvision/models/resnet.py
+
 def conv3x3(in_planes,out_planes,stride=1,dilation=1):
     kernel_size=np.asarray((3,3))
     upsampled_kernel_size=(kernel_size-1)*(dilation-1)+kernel_size
@@ -105,7 +102,7 @@ class DON(nn.Module):
         x=self.fc(x)
         return x
 
-don=DON(1000).to(device)
-don.load_state_dict(model_zoo.load_url(model_URL['resnet34']))
+# don=DON(1000).to(device)
+# don.load_state_dict(model_zoo.load_url(model_URL['resnet34']))
 
 

@@ -5,6 +5,7 @@ import imageio
 from skimage import io, transform
 import cv2
 import functools
+import shutil
 
 import torch
 import torch.nn as nn
@@ -14,7 +15,7 @@ from torchvision import transforms,utils
 from tqdm import trange
 
 device=torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
-print("GPU is working:",torch.cuda.is_available())
+# print("GPU is working:",torch.cuda.is_available())
 
 class TripletDataSet(Dataset):
     def __init__(self,load=True,to_file=True,iterations=100):
@@ -48,7 +49,7 @@ class TripletDataSet(Dataset):
         if self.to_file:
             self.triples_path = "/home/ali/Representation-learning/triplets/"
             if not load:
-                os.removedirs("/home/ali/Representation-learning/triplets/")
+                shutil.rmtree("/home/ali/Representation-learning/triplets/")
                 os.makedirs("/home/ali/Representation-learning/triplets/")
                 self.collect_triplets_to_folder(iterations)
             else:
@@ -66,20 +67,22 @@ class TripletDataSet(Dataset):
         idx=np.mod(idx,self.__len__())
         if self.to_file:
             anchor,pos,neg=self.read_triplet(idx)
-            sample={'anchor':anchor,
-                    'positive':pos,
-                    'negative':neg}
+            # sample={'anchor':anchor,
+            #         'positive':pos,
+            #         'negative':neg}
+            sample=torch.stack([anchor,pos,neg])
         else:
-            sample = {'anchor': self.triplets[idx][0],
-                      'positive': self.triplets[idx][1],
-                      'negative': self.triplets[idx][2]}
+            # sample = {'anchor': self.triplets[idx][0],
+            #           'positive': self.triplets[idx][1],
+            #           'negative': self.triplets[idx][2]}
+            sample=self.triplets[idx]
         return sample
 
     def show_sample(self,idx):
         sample=self.__getitem__(idx)
-        anchor = sample['anchor'].permute(1, 2, 0).numpy()
-        pos = sample['positive'].permute(1, 2, 0).numpy()
-        neg = sample['negative'].permute(1, 2, 0).numpy()
+        anchor = sample[0].permute(1, 2, 0).numpy()
+        pos = sample[0].permute(1, 2, 0).numpy()
+        neg = sample[0].permute(1, 2, 0).numpy()
         image=np.hstack([anchor,pos,neg])
         cv2.imshow("anchor, pos, neg", image)
         cv2.waitKey(0)
@@ -90,9 +93,10 @@ class TripletDataSet(Dataset):
         self.height=int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         self.width=int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         factor=self.ref_length/length
-        frames = torch.empty((self.ref_length, self.num_channels, self.height, self.width),dtype=torch.uint8)
+        frames = torch.empty((self.ref_length, self.num_channels, self.height//2, self.width//2),dtype=torch.uint8)
         for i in range(length):
             ret,frame=cap.read()
+            frame=cv2.resize(frame,(self.width//2,self.height//2))
             if ret:
                 frame=torch.from_numpy(frame)
                 frame=frame.permute(2,0,1)
@@ -125,7 +129,7 @@ class TripletDataSet(Dataset):
     def collect_triplets(self,iterations=100):
         # multi-video
         num_triplets=(self.video_count**2)*(2*self.video_count-1)
-        triplets=torch.empty(num_triplets*iterations,3,self.num_channels,self.height,self.width,dtype=torch.uint8)
+        triplets=torch.empty(num_triplets*iterations,3,self.num_channels,self.height//2,self.width//2,dtype=torch.uint8)
         for _ in trange(iterations):
             anchor_index = self.sample_anchor()
             pos_index = self.sample_positive(anchor_index)
@@ -203,8 +207,8 @@ class TripletDataSet(Dataset):
                 index += 1
         return triplets
 
-a=TripletDataSet()
-print(len(a))
-for i in range(10):
-    idx=np.random.randint(0,len(a))
-    a.show_sample(idx)
+# a=TripletDataSet(load=False)
+# print(len(a))
+# for i in range(10):
+#     idx=np.random.randint(0,len(a))
+#     a.show_sample(idx)

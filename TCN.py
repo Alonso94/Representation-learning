@@ -6,15 +6,13 @@ from torch import multiprocessing
 from torchvision import models
 
 import numpy as np
-import imageio
-import os
-import functools
-from PIL import Image
 from tqdm import trange
 import matplotlib.pyplot as plt
-import time
-import visvis as vv
+
+from building_dataset import TripletDataSet
+
 device=torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+print("GPU is working:",torch.cuda.is_available())
 
 class TCN(nn.Module):
     def __init__(self):
@@ -36,7 +34,7 @@ class TCN(nn.Module):
         # softmax2d is an activation in each channel
         # spatial softmax s_{ij}=\frac{exp(a_{ij})}{\sum_{i',j'} exp(a_{i'j'})}
         self.spatial_softmax=nn.Softmax2d()
-        self.fc7=nn.Linear(6*6*32,32)
+        self.fc7=nn.Linear(20*13*33,32)
         self.alpha=10.0
 
     def normalize(self,x):
@@ -46,54 +44,55 @@ class TCN(nn.Module):
         return output
 
     def forward(self,x):
+        # 3 x 160 x 320
         x=self.conv1(x)
+        # 32 x 79 x 159
         x=self.conv2_1(x)
+        # 32 x 77 x 157
         x=self.conv2_2(x)
+        # 64 x 77 x 157
         x=F.max_pool2d(x,kernel_size=3,stride=2)
+        # 64 x 38 x 78
         x=self.conv3(x)
+        # 80 x 38 x 78
         x=self.conv4(x)
+        # 192 x 36 x 76
         x=F.max_pool2d(x,kernel_size=3,stride=2)
+        # 192 x 17 x 37
         x=self.mix5_1(x)
+        # 256 x 17 x 37
         x=self.mix5_2(x)
+        # 288 x 17 x 37
         x=self.mix5_3(x)
+        # 288 x 17 x 37
         x=self.conv6_1(x)
+        # 100 x 15 x 35
         x=self.batch_norm_1(x)
+        # 100 x 15 x 35
         x=self.conv6_2(x)
+        # 20 x 13 x 33
         x=self.batch_norm_2(x)
+        # 20 x 13 x 33
         x=self.spatial_softmax(x)
+        # 20 x 13 x 33
         x=self.fc7(x.view(x.size()[0],-1))
         return self.normalize(x)*self.alpha
 
 class TCN_trainer:
     def __init__(self):
         print("TCN trainer started")
-        self.num_epochs=10000
-        self.minibatch_size=250
+        self.num_epochs=100
+        self.minibatch_size=32
         self.learning_rate=0.01
         self.triplets_from_video=5
         self.iterate_over_triplets=5
         self.margin=10
 
         self.model=TCN().to(device)
-        self.triplate_builder=TripletBuilder()
+        self.dataset=TripletDataSet()
         self.optimizer=torch.optim.SGD(self.model.parameters(),lr=self.learning_rate)
         self.lr_scheduler=torch.optim.lr_scheduler.MultiStepLR(self.optimizer,milestones=[100,200,1000],gamma=0.1)
 
-        self.queue=multiprocessing.Queue(1)
-        self.dataset_builder_process=multiprocessing.Process(target=self.build_set,args=(self.queue,))#,daemon=True)
-        self.dataset_builder_process.start()
-
-    def build_set(self,queue=None):
-        print("\n start process")
-        while True:
-            datasets=[]
-            for i in range(self.triplets_from_video):
-                print(i, "build set")
-                dataset=self.triplate_builder.collect_triplets()
-                datasets.append(dataset)
-            dataset=torch.utils.Data.ConcatDataset(datasets)
-            print('Created {0} triplets'.format(len(dataset)))
-            queue.put(dataset)
 
     def distance(self,x,y):
         diff=torch.abs(x-y)
@@ -103,20 +102,17 @@ class TCN_trainer:
         epochs_progress=trange(self.num_epochs)
         xx, yy=[], []
         for epoch in epochs_progress:
-            print("enter the loop")
-            dataset=self.queue.get()
-            print("dataset ...")
-            dataloader=torch.utils.Data.DataLoader(dataset,self.minibatch_size,shuffle=True,pin_memory=device)
-            print("dataloaded..")
+            dataloader=torch.utils.data.DataLoader(self.dataset,self.minibatch_size,shuffle=True,pin_memory=device)
+            # print("dataloaded..")
             x=0
             iteration_range=trange(self.iterate_over_triplets)
             for _ in iteration_range:
                 losses=[]
                 # no labels
-                for minibatch,_ in dataloader:
+                for minibatch in dataloader:
                     x+=1
                     frames=torch.autograd.Variable(minibatch)
-                    frames=frames.to(device)
+                    frames=frames.to(device).float()
                     # inputs
                     anchor=frames[:,0,:,:,:]
                     pos=frames[:,1,:,:,:]
@@ -129,7 +125,7 @@ class TCN_trainer:
                     d_pos=self.distance(anchor_output,pos_output)
                     d_neg=self.distance(anchor_output,neg_output)
                     loss=torch.clamp(self.margin+d_pos-d_neg,min=0.0).mean()
-                    losses.append(loss)
+                    losses.append(loss.mean().item())
                     # optimize
                     self.optimizer.zero_grad()
                     loss.backward()

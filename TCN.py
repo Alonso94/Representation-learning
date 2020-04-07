@@ -35,6 +35,9 @@ class TCN(nn.Module):
         # spatial softmax s_{ij}=\frac{exp(a_{ij})}{\sum_{i',j'} exp(a_{i'j'})}
         self.spatial_softmax=nn.Softmax2d()
         self.fc7=nn.Linear(20*13*33,32)
+        # to test for DoN
+        # descriptor_dims=256
+        # self.fc7=nn.Conv2d(self.resnet.in_planes, descriptor_dims, 1)
         self.alpha=10.0
 
     def normalize(self,x):
@@ -82,7 +85,7 @@ class TCN_trainer:
     def __init__(self):
         print("TCN trainer started")
         self.num_epochs=100
-        self.minibatch_size=32
+        self.minibatch_size=16
         self.learning_rate=0.01
         self.triplets_from_video=5
         self.iterate_over_triplets=5
@@ -138,8 +141,3 @@ class TCN_trainer:
                 plt.ylabel("loss")
                 plt.plot(xx,yy)
                 plt.show()
-
-tcn=TCN_trainer()
-# tcn.build_set()
-# time.sleep(100)
-tcn.run()

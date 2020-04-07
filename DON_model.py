@@ -11,7 +11,7 @@ import torch.utils.model_zoo as model_zoo
 model_URL={'resnet34': 'https://download.pytorch.org/models/resnet34-333f7ec4.pth'}
 
 device=torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
-print("GPU is working:",torch.cuda.is_available())
+# print("GPU is working:",torch.cuda.is_available())
 
 # Based on https://github.com/warmspringwinds/vision/blob/eb6c13d3972662c55e752ce7a376ab26a1546fb5/torchvision/models/resnet.py
 
@@ -129,25 +129,29 @@ class DON(nn.Module):
     def forward(self,x):
         input_dims = x.size()[2:]
         x=self.resnet(x)
-        x=F.upsample(x,size=input_dims,mode='bilinear',align_corners=True)
+        # 256 x 20 x 40
+        x=F.interpolate(x,size=input_dims,mode='bilinear',align_corners=True)
         # 256 x 160 x 320
         return x
 
+    def process_output(self,x):
+        # [N,descriptor_dims,h,w] -> [N,w*h,descriptor_dim]
+        N,dim,w,h=x.size()
+        x=x.view(N,dim,w*h)
+        x=x.permute(0,2,1)
+        return x
 
-model=DON(256).to(device)
-dataset=TripletDataSet()
-dataloader = torch.utils.data.DataLoader(dataset, 8, shuffle=True, pin_memory=device)
-for minibatch in dataloader:
-    frames = torch.autograd.Variable(minibatch)
-    frames = frames.to(device).float()
-    # inputs
-    anchor = frames[:, 0, :, :, :]
-    pos = frames[:, 1, :, :, :]
-    neg = frames[:, 2, :, :, :]
-    # outputs
-    anchor_output = model(anchor)
-    pos_output = model(pos)
-    neg_output = model(neg)
-
-
-
+# model=DON(256).to(device)
+# dataset=TripletDataSet()
+# dataloader = torch.utils.data.DataLoader(dataset, 4, shuffle=True, pin_memory=device)
+# for minibatch in dataloader:
+#     frames = torch.autograd.Variable(minibatch)
+#     frames = frames.to(device).float()
+#     # inputs
+#     anchor = frames[:, 0, :, :, :]
+#     pos = frames[:, 1, :, :, :]
+#     neg = frames[:, 2, :, :, :]
+#     # outputs
+#     anchor_output = model(anchor)
+#     pos_output = model(pos)
+#     neg_output = model(neg)

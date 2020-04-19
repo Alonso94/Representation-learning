@@ -82,7 +82,7 @@ class TCN(nn.Module):
         return self.normalize(x)*self.alpha
 
 class TCN_trainer:
-    def __init__(self):
+    def __init__(self,load=True):
         print("TCN trainer started")
         self.num_epochs=100
         self.minibatch_size=16
@@ -92,6 +92,11 @@ class TCN_trainer:
         self.margin=10
 
         self.model=TCN().to(device)
+        self.load_from = "/home/ali/Representation-learning/models/TCN.pth"
+        self.save_to = "/home/ali/Representation-learning/models/TCN.pth"
+        if load:
+            self.model.load_state_dict(torch.load(self.load_from,map_location=device))
+            self.model.eval()
         self.dataset=TripletDataSet()
         self.optimizer=torch.optim.SGD(self.model.parameters(),lr=self.learning_rate)
         self.lr_scheduler=torch.optim.lr_scheduler.MultiStepLR(self.optimizer,milestones=[100,200,1000],gamma=0.1)
@@ -141,3 +146,4 @@ class TCN_trainer:
                 plt.ylabel("loss")
                 plt.plot(xx,yy)
                 plt.show()
+            torch.save(self.model.state_dict(),self.save_to)

@@ -18,14 +18,15 @@ device=torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu'
 # print("GPU is working:",torch.cuda.is_available())
 
 class TripletDataSet(Dataset):
-    def __init__(self,load=True,to_file=True,iterations=100):
+    def __init__(self,single_view=True,load=True,to_file=True,iterations=500):
         print("Triplet builder started")
         self.load=load
         self.to_file=to_file
         self.ref_length = 100
-        self.positive_margin = 10
-        self.negative_margin = 20
+        self.positive_margin = 5
+        self.negative_margin = 15
         self.video_index = 0
+        self.single_view=single_view
 
         self.num_channels=3
         self.height=640
@@ -67,14 +68,8 @@ class TripletDataSet(Dataset):
         idx=np.mod(idx,self.__len__())
         if self.to_file:
             anchor,pos,neg=self.read_triplet(idx)
-            # sample={'anchor':anchor,
-            #         'positive':pos,
-            #         'negative':neg}
             sample=torch.stack([anchor,pos,neg])
         else:
-            # sample = {'anchor': self.triplets[idx][0],
-            #           'positive': self.triplets[idx][1],
-            #           'negative': self.triplets[idx][2]}
             sample=self.triplets[idx]
         return sample
 
@@ -128,25 +123,36 @@ class TripletDataSet(Dataset):
 
     def collect_triplets(self,iterations=100):
         # multi-video
-        num_triplets=(self.video_count**2)*(2*self.video_count-1)
+        if self.single_view:
+            num_triplets=self.video_count
+        else:
+            num_triplets=(self.video_count**2)*(2*self.video_count-1)
         triplets=torch.empty(num_triplets*iterations,3,self.num_channels,self.height//2,self.width//2,dtype=torch.uint8)
         for _ in trange(iterations):
             anchor_index = self.sample_anchor()
             pos_index = self.sample_positive(anchor_index)
             neg_index = self.sample_negative(anchor_index)
-            for i in range(self.video_count):
-                for j in range(self.video_count):
-                    for k in range(self.video_count):
-                        anchor = self.frames[i][anchor_index]
-                        pos = self.frames[j][pos_index]
-                        neg = self.frames[k][neg_index]
-                        triplets[self.index]=torch.stack([anchor,pos,neg])
-                        self.index += 1
-                        if j!=i:
-                            pos = self.frames[j][anchor_index]
+            if self.single_view:
+                for i in range(self.video_count):
+                    anchor = self.frames[i][anchor_index]
+                    pos = self.frames[i][pos_index]
+                    neg = self.frames[i][neg_index]
+                    triplets[self.index] = torch.stack([anchor, pos, neg])
+                    self.index += 1
+            else:
+                for i in range(self.video_count):
+                    for j in range(self.video_count):
+                        for k in range(self.video_count):
+                            anchor = self.frames[i][anchor_index]
+                            pos = self.frames[j][pos_index]
                             neg = self.frames[k][neg_index]
-                            triplets[self.index] = torch.stack([anchor, pos, neg])
+                            triplets[self.index]=torch.stack([anchor,pos,neg])
                             self.index += 1
+                            if j!=i:
+                                pos = self.frames[j][anchor_index]
+                                neg = self.frames[k][neg_index]
+                                triplets[self.index] = torch.stack([anchor, pos, neg])
+                                self.index += 1
         return triplets
 
     def write_triplet_to_files(self,i,anchor,pos,neg):
@@ -172,40 +178,33 @@ class TripletDataSet(Dataset):
         neg=torch.from_numpy(neg).permute(2,0,1)
         return anchor,pos,neg
 
-    def collect_triplets_to_folder(self,iterations=100):
+    def collect_triplets_to_folder(self,iterations=500):
         # multi-video
         for _ in trange(iterations):
             anchor_index = self.sample_anchor()
             pos_index = self.sample_positive(anchor_index)
             neg_index = self.sample_negative(anchor_index)
-            for i in range(self.video_count):
-                for j in range(self.video_count):
-                    for k in range(self.video_count):
-                        anchor = self.frames[i][anchor_index]
-                        pos = self.frames[j][pos_index]
-                        neg = self.frames[k][neg_index]
-                        self.write_triplet_to_files(i,anchor,pos,neg)
-                        self.index += 1
-                        if j != i:
-                            pos = self.frames[j][anchor_index]
+            if self.single_view:
+                for i in range(self.video_count):
+                    anchor = self.frames[i][anchor_index]
+                    pos = self.frames[i][pos_index]
+                    neg = self.frames[i][neg_index]
+                    self.write_triplet_to_files(i,anchor,pos,neg)
+                    self.index += 1
+            else:
+                for i in range(self.video_count):
+                    for j in range(self.video_count):
+                        for k in range(self.video_count):
+                            anchor = self.frames[i][anchor_index]
+                            pos = self.frames[j][pos_index]
                             neg = self.frames[k][neg_index]
                             self.write_triplet_to_files(i,anchor,pos,neg)
                             self.index += 1
-
-    def collect_triplets_single_view(self,iterations=500):
-        triplets = torch.empty(self.video_count * iterations, 3, self.num_channels, self.height, self.width,dtype=torch.uint8)
-        index=0
-        for _ in trange(iterations):
-            anchor_index = self.sample_anchor()
-            pos_index = self.sample_positive(anchor_index)
-            neg_index = self.sample_negative(anchor_index)
-            for k in range(self.video_count):
-                anchor = self.frames[k][anchor_index]
-                pos = self.frames[k][pos_index]
-                neg = self.frames[k][neg_index]
-                triplets[index]=torch.stack([anchor,pos,neg])
-                index += 1
-        return triplets
+                            if j != i:
+                                pos = self.frames[j][anchor_index]
+                                neg = self.frames[k][neg_index]
+                                self.write_triplet_to_files(i,anchor,pos,neg)
+                                self.index += 1
 
 # a=TripletDataSet(load=False)
 # print(len(a))

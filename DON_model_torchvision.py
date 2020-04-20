@@ -23,6 +23,7 @@ class DON_torchvision(nn.Module):
         self.layer3=self.resnet.layer3
         self.layer4=self.resnet.layer4
         self.fc=nn.Conv2d(self.resnet.inplanes, descriptor_dims, 1)
+        self.fc1 = nn.Linear(descriptor_dims * 160 * 320, 32)
 
     def forward(self,x):
         input_dims=x.size()[2:]
@@ -41,7 +42,9 @@ class DON_torchvision(nn.Module):
         # 256 x 5 x 10
         x=F.interpolate(x,size=input_dims,mode='bilinear',align_corners=True)
         # 256 x 160 x 320
-        return x
+        y=x.view(x.size()[0],-1)
+        y = self.fc1(y)
+        return x,y
 
 # model=DON_torchvision(256).to(device)
 # dataset=TripletDataSet()

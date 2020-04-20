@@ -126,13 +126,20 @@ class DON(nn.Module):
         self.resnet.fc.weight.data.normal_(0, 0.01)
         self.resnet.fc.bias.data.zero_()
 
+        self.spatial_softmax = nn.Softmax2d()
+        self.fc1 = nn.Linear(256*160*320, 512)
+        self.fc2=nn.Linear(512,32)
+
     def forward(self,x):
         input_dims = x.size()[2:]
         x=self.resnet(x)
         # 256 x 20 x 40
         x=F.interpolate(x,size=input_dims,mode='bilinear',align_corners=True)
         # 256 x 160 x 320
-        return x
+        y = self.spatial_softmax(x)
+        y=self.fc1(y.view(y.size()[0],-1))
+        y=self.fc2(y)
+        return x,y
 
     def process_output(self,x):
         # [N,descriptor_dims,h,w] -> [N,w*h,descriptor_dim]

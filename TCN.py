@@ -104,7 +104,7 @@ class TCN_trainer:
 
     def distance(self,x,y):
         diff=torch.abs(x-y)
-        return torch.pow(diff,2).sum(1)
+        return torch.pow(diff,2).sum(-1)
 
     def run(self):
         epochs_progress=trange(self.num_epochs)

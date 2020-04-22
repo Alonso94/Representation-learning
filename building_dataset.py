@@ -45,7 +45,7 @@ class TripletDataSet(Dataset):
 
         # collect triplets
         self.frames = [self.read_video(p) for p in self.video_paths]
-        self.framers = torch.stack(self.frames, dim=0)
+        self.frames = torch.stack(self.frames, dim=0)
         self.index = 0
         if self.to_file:
             self.triples_path = "/home/ali/Representation-learning/triplets/"

@@ -29,7 +29,7 @@ class TripletLoss(nn.Module):
     def forward(self,anchor,pos,neg):
         pos_distance=self.distance(anchor,pos)
         neg_distance=self.distance(anchor,neg)
-        loss=(self.margin+pos_distance-neg_distance).mean()
+        loss=torch.clamp(self.margin+pos_distance-neg_distance,min=0.0).mean()
         return loss
 
 class DON_trainer:
@@ -48,11 +48,16 @@ class DON_trainer:
         self.max_iter=3500
         self.dataset=TripletDataSet()
         self.dataloader = torch.utils.data.DataLoader(self.dataset, 4, shuffle=True, pin_memory=device)
+        self.images = self.dataset.frames[0].float()
+        self.embedding=torch.empty((len(self.images),32))
 
     def run_training(self,iterations=20):
+        global i
         running_loss=0.0
+
         for epoch in trange(iterations):
             for i,data in enumerate(self.dataloader):
+                step=i+len(self.dataloader)*epoch
                 frames = Variable(data)
                 frames = frames.to(device).float()
                 # inputs
@@ -63,7 +68,7 @@ class DON_trainer:
                 anchor_out,anchor_embedding=self.model(anchor)
                 pos_out,pos_embedding=self.model(pos)
                 neg_out,neg_embedding=self.model(neg)
-                self.writer.add_image("original vs. prediction", torchvision.utils.make_grid([anchor[0],anchor_out[0]]),i+epoch*len(self.dataloader))
+                self.writer.add_image("original vs. prediction", torchvision.utils.make_grid([anchor[0],anchor_out[0]]),step)
                 # loss computation
                 loss=self.criterion(anchor_embedding,pos_embedding,neg_embedding)
                 # optimization
@@ -72,7 +77,12 @@ class DON_trainer:
                 self.optimizer.step()
                 # plot loss
                 running_loss+=loss.item()
-                self.writer.add_scalar("training_loss",running_loss,i+epoch*len(self.dataloader))
+                self.writer.add_scalar("training_loss",running_loss,step)
+            for i in range(len(self.images)):
+                img=self.images[i].unsqueeze(0).to(device)
+                with torch.no_grad():
+                    output,self.embedding[i]=self.model(img)
+            self.writer.add_embedding(self.embedding,global_step=epoch)
             torch.save(self.model.state_dict(), self.save_to)
 
 don=DON_trainer(load=True)
